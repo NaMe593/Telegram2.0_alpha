@@ -1,5 +1,5 @@
 class ChatService {
-  constructor(apiUrl = 'http://localhost:3000/api') {
+  constructor(apiUrl = 'http://localhost:3001/api') {
     this.apiUrl = apiUrl;
     console.log('🔧 ChatService инициализирован');
     console.log(`📍 API URL: ${this.apiUrl}`);

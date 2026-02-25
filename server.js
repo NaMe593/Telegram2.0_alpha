@@ -22,7 +22,7 @@ app.use((req, res, next) => {
 // Временное хранилище данных
 let chats = [
   { id: 1, name: 'John Doe', message: 'How are you?', numbers: 5, src: 'Resources/images/back.png' },
-  { id: 2, name: 'Jo Doe', message: 'Howe you?', numbers: 100, src: 'Resources/images/back.png' }
+      { id: 2, name: 'Jo Doe', message: 'Howe you?', numbers: 100, src: 'Resources/images/back.png' }
 ];
 
 let messages = {
@@ -34,7 +34,7 @@ let messages = {
     { id: 1, from: 'friend', name: 'Jo', text: 'Hey mate!', time: '14:00', avatar_id: 1 },
     { id: 2, from: 'me', text: 'Hello!', time: '14:01' },
     { id: 3, from: 'friend', name: 'Jo', text: 'How are you doing?', time: '14:02', avatar_id: 1 }
-  ]
+  ],
 };
 
 // GET все чаты
@@ -56,12 +56,10 @@ app.post('/api/chats/:chatId/messages', (req, res) => {
   const chatId = parseInt(req.params.chatId);
   const { from, text, time, avatar_id } = req.body;
 
-  console.log('✅ Новое сообщение: ' + text.substring(0, 20));
+  const textPreview = (typeof text === 'string' ? text : '').substring(0, 20);
+  console.log('✅ Новое сообщение: ' + textPreview);
 
-  if (!messages[chatId]) {
-    messages[chatId] = [];
-  }
-
+  if (!messages[chatId]) { messages[chatId] = []; }
   const newMessage = {
     id: (messages[chatId].length || 0) + 1,
     from,
@@ -70,7 +68,6 @@ app.post('/api/chats/:chatId/messages', (req, res) => {
     time,
     avatar_id
   };
-
   messages[chatId].unshift(newMessage);
   res.status(201).json(newMessage);
 });
@@ -79,16 +76,18 @@ app.post('/api/chats/:chatId/messages', (req, res) => {
 app.post('/api/chats', (req, res) => {
   const { name, message, numbers, src } = req.body;
 
-  console.log('✅ Новый чат: ' + name);
+  console.log('✅ Новый чат: ' + (name || '<unnamed>'));
+  if (!name) {
+    return res.status(400).json({ error: 'name is required' });
+  }
 
   const newChat = {
     id: (chats.length > 0 ? Math.max(...chats.map(c => c.id)) : 0) + 1,
     name,
     message,
-    numbers: numbers > 99 ? '99+' : numbers,
+    numbers: (typeof numbers === 'number' && numbers > 99) ? '99+' : numbers,
     src
   };
-
   chats.push(newChat);
   messages[newChat.id] = [];
   res.status(201).json(newChat);
@@ -118,7 +117,7 @@ app.delete('/api/chats/:chatId/messages/:messageId', (req, res) => {
 });
 
 // Запуск сервера
-const PORT = 3000;
+const PORT = 3001;
 app.listen(PORT, () => {
   console.log('');
   console.log('═══════════════════════════════════════');

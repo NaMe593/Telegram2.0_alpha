@@ -1,34 +1,62 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import './App.css'
 import Menu from './Components/messageMenu'
 import Box from './Components/box'
+import ChatService from './services/ChatService'
 
 function App() {
-  const [chats, setChats] = useState([
-    { id: 1, name: 'John Doe', message: 'How are you?', numbers: 5, src: 'Resources/images/back.png' },
-    { id: 2, name: 'Jo Doe', message: 'Howe you?', numbers: 100, src: 'Resources/images/back.png' }
-  ])
-  
+  const [chatService] = useState(() => new ChatService())
+  const [chats, setChats] = useState([])
   const [selectedChatId, setSelectedChatId] = useState(1)
-  
-  // Сообщения по чатам
-  const [chatMessages, setChatMessages] = useState({
-    1: [
-      { id: 1, from: 'friend', name: 'John', text: 'Hello!', time: '13:55', avatar_id: 1 },
-      { id: 2, from: 'me', text: 'Hi there!', time: '13:56' }
-    ],
-    2: [
-      { id: 1, from: 'friend', name: 'Jo', text: 'Hey mate!', time: '14:00', avatar_id: 1 },
-      { id: 2, from: 'me', text: 'Hello!', time: '14:01' },
-      { id: 3, from: 'friend', name: 'Jo', text: 'How are you doing?', time: '14:02', avatar_id: 1 }
-    ]
-  })
-  
-  const currentMessages = chatMessages[selectedChatId] || []
+  const [chatMessages, setChatMessages] = useState([])
+  const [loading, setLoading] = useState(true)
   
   const [menuVisible, setMenuVisible] = useState(false)
   const [menuPos, setMenuPos] = useState({ x: 0, y: 0 })
   const [selectedMessage, setSelectedMessage] = useState(null)
+
+  // Загрузить данные при монтировании
+  useEffect(() => {
+    loadInitialData();
+  }, []);
+
+  // Загрузить всё при смене чата
+  useEffect(() => {
+    loadChatMessages(selectedChatId);
+  }, [selectedChatId]);
+
+  // Загрузить чаты при старте приложения
+  async function loadInitialData() {
+    try {
+      setLoading(true);
+      const chats = await chatService.fetchChats();
+      setChats(chats);
+      
+      if (chats.length > 0) {
+        setSelectedChatId(chats[0].id);
+        const messages = await chatService.fetchMessages(chats[0].id);
+        setChatMessages(messages);
+      }
+    } catch (error) {
+      console.error('Ошибка при загрузке данных:', error);
+      // Используем локальные данные
+      setChats(chatService.getChats());
+      setChatMessages(chatService.getMessages(selectedChatId));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Загрузить сообщения конкретного чата
+  async function loadChatMessages(chatId) {
+    try {
+      const messages = await chatService.fetchMessages(chatId);
+      setChatMessages(messages);
+    } catch (error) {
+      console.error('Ошибка при загрузке сообщений:', error);
+      setChatMessages(chatService.getMessages(chatId));
+    }
+  }
 
   // Функция для отображения меню при клике на сообщение
   function handleMessageClick(e, messageId) {
@@ -66,60 +94,66 @@ function App() {
     setMenuVisible(false)
   }
 
-  // Добавить новое сообщение в текущий чат
-  function addMessage(from, messageText, time, avatar_id = null) {
-    const formattedText = messageText.replace(/\n/g, '<br/>')
-    
-    const newMessage = {
-      id: currentMessages.length + 1,
-      from,
-      name: from === 'me' ? 'You' : from,
-      text: formattedText,
-      time,
-      avatar_id
+  // Добавить новое сообщение в текущий чат через ChatService
+  async function addMessage(from, messageText, time, avatar_id = null) {
+    try {
+      await chatService.sendMessage(selectedChatId, from, messageText, time, avatar_id);
+      // Обновляем сообщения текущего чата
+      setChatMessages([...chatService.getMessages(selectedChatId)]);
+    } catch (error) {
+      console.error('Ошибка при отправке сообщения:', error);
+      chatService.addMessage(selectedChatId, from, messageText, time, avatar_id);
+      setChatMessages([...chatService.getMessages(selectedChatId)]);
     }
-    
-    setChatMessages({
-      ...chatMessages,
-      [selectedChatId]: [newMessage, ...currentMessages]
-    })
   }
   
   // Переключиться на другой чат
-  function handleSelectChat(chatId) {
-    setSelectedChatId(chatId)
+  async function handleSelectChat(chatId) {
+    setSelectedChatId(chatId);
   }
 
-  // Добавить новый чат
-  function addChat(message, name, numbers, src) {
-    const displayNumbers = numbers > 99 ? '99+' : numbers
-    
-    const newChat = {
-      id: chats.length + 1,
-      name,
-      message,
-      numbers: displayNumbers,
-      src
+  // Добавить новый чат через ChatService
+  async function addChat(message, name, numbers, src) {
+    try {
+      await chatService.createChat(name, message, numbers, src);
+      setChats([...chatService.getChats()]);
+    } catch (error) {
+      console.error('Ошибка при создании чата:', error);
+      chatService.addChat(name, message, numbers, src);
+      setChats([...chatService.getChats()]);
     }
-    
-    setChats([...chats, newChat])
-  }
-
-  // Отобразить/скрыть детали сообщения
-  function toggleDetails() {
-    // Это управляется в компоненте Menu через состояние
   }
 
   return (
     <>
       <div onClick={handleHideMenu}>
+        {loading && <div style={{padding: '10px', textAlign: 'center', backgroundColor: '#f0f0f0'}}>Загрузка данных...</div>}
+        
         <Box 
-          messages={currentMessages} 
+          messages={chatMessages} 
           chats={chats} 
           selectedChatId={selectedChatId}
           onMessageClick={handleMessageClick}
           onSelectChat={handleSelectChat}
         />
+        
+        <button 
+          onClick={loadInitialData}
+          style={{
+            position: 'fixed',
+            bottom: '20px',
+            right: '20px',
+            padding: '10px 15px',
+            backgroundColor: '#007bff',
+            color: 'white',
+            border: 'none',
+            borderRadius: '5px',
+            cursor: 'pointer',
+            zIndex: 999
+          }}
+        >
+          🔄 Обновить
+        </button>
       </div>
       
       {menuVisible && (
